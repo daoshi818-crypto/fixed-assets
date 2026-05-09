@@ -10,7 +10,12 @@ async function getFieldConfig(env) {
   const now = Date.now();
   if (cachedFieldConfig && now < configCacheTime) return cachedFieldConfig;
   try {
-    let config = await env.CONFIG_KV?.get('field_visibility', 'json');
+    // 检查 KV 是否可用
+    if (!env.CONFIG_KV) {
+      console.warn('CONFIG_KV not bound, using fallback config');
+      return { publicFields: PUBLIC_FIELDS_FALLBACK, hiddenFields: [] };
+    }
+    let config = await env.CONFIG_KV.get('field_visibility', 'json');
     if (!config) {
       config = { publicFields: PUBLIC_FIELDS_FALLBACK, hiddenFields: [] };
     }
