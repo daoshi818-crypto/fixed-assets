@@ -1,15 +1,17 @@
-# fixed-assets/wrangler.toml
 name = "fixed-assets"
 
-# 环境变量（明文）
+# ⚠️ 建议：生产环境不要写死 secret（可以先这样用）
 [vars]
 APP_ID = "cli_a9744fcb1a391cc8"
 APP_SECRET = "KMBW1e83BhwdYRViYb1e1gDPLA2mHXZ8"
+
 APP_TOKEN = "NeCRbtLv2a6TfbsD3s1cHq3hncf"
 TABLE_ID = "tblFGeKrKgVPxfAu"
-REDIRECT_URI = "https://86782b78.fixed-assets.pages.dev/api/login"
 
-# KV 命名空间绑定
+# ✔ OAuth 必须是前端域名（不是 /api）
+REDIRECT_URI = "https://fixed-assets-2r6a5duy.edgeone.cool/"
+
+# KV 存储
 [[kv_namespaces]]
 binding = "USER_TOKENS"
-id = "8fac596452624624ba77eef06ac884af"   # 你的 KV 命名空间 ID
+id = "8fac596452624624ba77eef06ac884af"
