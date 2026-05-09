@@ -26,7 +26,7 @@
         .detail-panel { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-top: 24px; }
         .field-group { margin-bottom: 16px; }
         label { display: block; font-weight: 500; margin-bottom: 6px; color: #334155; }
-        input, select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
+        input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
         .readonly-field { background: #f8fafc; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; color: #1e293b; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
         .hidden { display: none; }
@@ -53,16 +53,14 @@
 <div class="note">💡 未登录只能查看公开字段（名称、编号、状态）。登录后可查看并编辑全部信息。</div>
 
 <script>
-    // 飞书授权配置
+    // 飞书授权配置（这些值会从后端获取？不，前端必须知道自己的 App ID 和回调地址）
     const APP_ID = 'cli_a9744fcb1a391cc8';
     const REDIRECT_URI = 'https://86782b78.fixed-assets.pages.dev/api/login';
 
-    // 全局状态
     let accessToken = localStorage.getItem('accessToken');
     let currentRecordId = null;
     let isLoggedIn = !!accessToken;
 
-    // DOM 元素
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const userInfoSpan = document.getElementById('userInfo');
@@ -71,16 +69,15 @@
     const detailFieldsDiv = document.getElementById('detailFields');
     const editActionsDiv = document.getElementById('editActions');
 
-    // ========== 辅助函数：安全提取飞书字段文本 ==========
+    // 安全提取飞书字段值（处理对象、数组）
     function getFieldValue(field) {
         if (field === null || field === undefined) return '';
         if (typeof field === 'string') return field;
         if (typeof field === 'number') return String(field);
         if (Array.isArray(field)) {
             if (field.length === 0) return '';
-            // 负责人通常是 [{name: "张三"}]
-            if (field[0].name) return field.map(item => item.name).join(', ');
-            if (field[0].text) return field.map(item => item.text).join(', ');
+            if (field[0]?.name) return field.map(item => item.name).join(', ');
+            if (field[0]?.text) return field.map(item => item.text).join(', ');
             return field.map(item => getFieldValue(item)).join(', ');
         }
         if (typeof field === 'object') {
@@ -117,7 +114,6 @@
         }
     }
 
-    // 处理 OAuth 回调
     async function handleAuthCallback() {
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
@@ -129,15 +125,14 @@
                 body: JSON.stringify({ code })
             });
             const json = await res.json();
-            if (json.code === 0 && json.data && json.data.accessToken) {
+            if (json.code === 0 && json.data?.accessToken) {
                 accessToken = json.data.accessToken;
                 localStorage.setItem('accessToken', accessToken);
                 isLoggedIn = true;
-                // 清除 URL 参数
                 const cleanUrl = window.location.origin + window.location.pathname;
                 window.history.replaceState({}, document.title, cleanUrl);
                 updateUI();
-                await loadList();      // 重新加载数据
+                await loadList();
                 return true;
             } else {
                 throw new Error(json.message || '登录失败');
@@ -159,7 +154,6 @@
         loadList();
     }
 
-    // ========== API 调用 ==========
     async function fetchList() {
         const headers = {};
         if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -193,7 +187,6 @@
         return true;
     }
 
-    // ========== 渲染列表 ==========
     async function loadList() {
         listContainer.innerHTML = '<div class="loading">加载中...</div>';
         try {
@@ -220,11 +213,9 @@
         }
     }
 
-    // ========== 渲染详情 ==========
     async function loadDetail(id) {
         if (!id) return;
         currentRecordId = id;
-        // 高亮选中的记录
         document.querySelectorAll('.record-item').forEach(item => {
             if (item.getAttribute('data-id') === id) item.classList.add('selected');
             else item.classList.remove('selected');
@@ -256,8 +247,7 @@
         ];
         let html = '<div class="grid-2">';
         for (const f of fieldsDef) {
-            const raw = record[f.key];
-            const value = getFieldValue(raw);
+            const value = getFieldValue(record[f.key]);
             html += `<div class="field-group"><label>${f.label}</label><input type="text" id="edit_${f.key}" value="${escapeHtml(value)}"></div>`;
         }
         html += '</div>';
