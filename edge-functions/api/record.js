@@ -1,6 +1,4 @@
 // edge-functions/api/record.js
-// EdgeOne Pages 环境：KV 绑定名称为 USER_TOKENS（全局变量）
-
 const PUBLIC_FIELDS = ['资产名称', '资产编号', '资产状态'];
 
 function jsonResponse(data, status = 200, isError = false) {
@@ -20,37 +18,33 @@ function jsonResponse(data, status = 200, isError = false) {
   );
 }
 
-// ==================== 租户 token 缓存（自动刷新） ====================
+// ==================== 租户 token 缓存 ====================
 let cachedTenantToken = null;
 let tenantTokenExpire = 0;
 
 async function getTenantAccessToken(env) {
   const now = Date.now();
-  if (cachedTenantToken && now < tenantTokenExpire) {
-    return cachedTenantToken;
-  }
+  if (cachedTenantToken && now < tenantTokenExpire) return cachedTenantToken;
+
+  const { APP_ID, APP_SECRET } = env;
+  if (!APP_ID || !APP_SECRET) throw new Error('Missing APP_ID or APP_SECRET');
 
   const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      app_id: env.APP_ID,
-      app_secret: env.APP_SECRET,
-    }),
+    body: JSON.stringify({ app_id: APP_ID, app_secret: APP_SECRET }),
   });
   const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error(`tenant token error: ${JSON.stringify(json)}`);
-  }
+  if (json.code !== 0) throw new Error(`tenant token error: ${JSON.stringify(json)}`);
 
   cachedTenantToken = json.tenant_access_token;
   tenantTokenExpire = now + (json.expire || 7200) * 1000 - 5 * 60 * 1000;
   return cachedTenantToken;
 }
 
-// ==================== 用户 token 管理（KV 存储 + 自动刷新） ====================
-async function getUserTokenData(openId) {
-  const raw = await USER_TOKENS.get(openId);
+// ==================== 用户 token 管理（KV） ====================
+async function getUserTokenData(openId, env) {
+  const raw = await env.USER_TOKENS.get(openId);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -59,8 +53,8 @@ async function getUserTokenData(openId) {
   }
 }
 
-async function saveUserTokenData(openId, data) {
-  await USER_TOKENS.put(openId, JSON.stringify(data));
+async function saveUserTokenData(openId, data, env) {
+  await env.USER_TOKENS.put(openId, JSON.stringify(data));
 }
 
 async function refreshUserToken(refreshToken, env) {
@@ -75,9 +69,7 @@ async function refreshUserToken(refreshToken, env) {
     }),
   });
   const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error(`refresh token error: ${JSON.stringify(json)}`);
-  }
+  if (json.code !== 0) throw new Error(`refresh error: ${JSON.stringify(json)}`);
   return {
     access_token: json.data.access_token,
     refresh_token: json.data.refresh_token,
@@ -86,15 +78,13 @@ async function refreshUserToken(refreshToken, env) {
 }
 
 async function getValidUserAccessToken(openId, env) {
-  let data = await getUserTokenData(openId);
+  let data = await getUserTokenData(openId, env);
   if (!data) return null;
   const now = Date.now();
-  if (data.expires_at > now + 5 * 60 * 1000) {
-    return data.access_token;
-  }
+  if (data.expires_at > now + 5 * 60 * 1000) return data.access_token;
   try {
     const newData = await refreshUserToken(data.refresh_token, env);
-    await saveUserTokenData(openId, newData);
+    await saveUserTokenData(openId, newData, env);
     return newData.access_token;
   } catch (err) {
     console.error('refresh failed', err);
@@ -107,9 +97,7 @@ async function verifyUserToken(token, env) {
     headers: { Authorization: `Bearer ${token}` },
   });
   const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error('Invalid user token');
-  }
+  if (json.code !== 0) throw new Error('Invalid user token');
   return json.data;
 }
 
@@ -126,9 +114,7 @@ async function getRecordList(tenantToken, isLoggedIn, env) {
     body: JSON.stringify({}),
   });
   const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error(`list error: ${JSON.stringify(json)}`);
-  }
+  if (json.code !== 0) throw new Error(`list error: ${JSON.stringify(json)}`);
   const items = json.data.items || [];
   return items.map((item) => {
     const fields = item.fields || {};
@@ -150,9 +136,7 @@ async function getRecordDetail(tenantToken, recordId, isLoggedIn, env) {
     headers: { Authorization: `Bearer ${tenantToken}` },
   });
   const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error(`detail error: ${JSON.stringify(json)}`);
-  }
+  if (json.code !== 0) throw new Error(`detail error: ${JSON.stringify(json)}`);
   const fields = json.data.record.fields || {};
   if (isLoggedIn) {
     return { id: recordId, ...fields };
@@ -176,9 +160,7 @@ async function updateRecord(userToken, recordId, fields, env) {
     body: JSON.stringify({ fields }),
   });
   const json = await res.json();
-  if (json.code !== 0) {
-    throw new Error(`update error: ${JSON.stringify(json)}`);
-  }
+  if (json.code !== 0) throw new Error(`update error: ${JSON.stringify(json)}`);
   return true;
 }
 
@@ -189,11 +171,10 @@ export async function onRequest(context) {
   const method = request.method;
 
   try {
+    // GET 请求：列表或详情
     if (method === 'GET') {
       const type = url.searchParams.get('type');
-      if (!type) {
-        return jsonResponse('Missing type', 400, true);
-      }
+      if (!type) return jsonResponse('Missing type', 400, true);
 
       const tenantToken = await getTenantAccessToken(env);
       let isLoggedIn = false;
@@ -205,11 +186,8 @@ export async function onRequest(context) {
           const userInfo = await verifyUserToken(userToken, env);
           const openId = userInfo.open_id;
           const validToken = await getValidUserAccessToken(openId, env);
-          if (validToken) {
-            isLoggedIn = true;
-          }
+          if (validToken) isLoggedIn = true;
         } catch (err) {
-          // token 无效，保持未登录
           console.error(err);
         }
       }
@@ -219,9 +197,7 @@ export async function onRequest(context) {
         return jsonResponse(list);
       } else if (type === 'detail') {
         const id = url.searchParams.get('id');
-        if (!id) {
-          return jsonResponse('Missing id', 400, true);
-        }
+        if (!id) return jsonResponse('Missing id', 400, true);
         const detail = await getRecordDetail(tenantToken, id, isLoggedIn, env);
         return jsonResponse(detail);
       } else {
@@ -229,18 +205,17 @@ export async function onRequest(context) {
       }
     }
 
+    // POST 请求：更新记录
     if (method === 'POST') {
       const action = url.searchParams.get('action');
-      if (action !== 'update') {
-        return jsonResponse('Invalid action', 400, true);
-      }
+      if (action !== 'update') return jsonResponse('Invalid action', 400, true);
 
       const authHeader = request.headers.get('Authorization');
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return jsonResponse('Unauthorized', 401, true);
       }
-
       const userToken = authHeader.slice(7);
+
       let openId;
       try {
         const userInfo = await verifyUserToken(userToken, env);
