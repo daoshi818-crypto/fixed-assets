@@ -1,6 +1,4 @@
 // edge-functions/api/login.js
-console.log('=== ENV keys ===', Object.keys(env));
-console.log('USER_TOKENS:', env.USER_TOKENS);
 export async function onRequestPost(context) {
   const { request, env } = context;
   const { APP_ID, APP_SECRET, REDIRECT_URI } = env;
@@ -38,13 +36,13 @@ export async function onRequestPost(context) {
     }
     const openId = userJson.data.open_id;
 
-    // 3. 存储 token 到 KV（使用 env.USER_TOKENS）
+    // 3. 存储 token 到 KV（EdgeOne 全局 KV 变量）
     const tokenData = {
       access_token: tokenJson.access_token,
       refresh_token: tokenJson.refresh_token,
       expires_at: Date.now() + tokenJson.expires_in * 1000,
     };
-    await env.USER_TOKENS.put(openId, JSON.stringify(tokenData));
+    await USER_TOKENS.put(openId, JSON.stringify(tokenData));
 
     // 4. 返回给前端
     return jsonResponse({
