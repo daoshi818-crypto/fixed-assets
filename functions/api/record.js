@@ -1,6 +1,40 @@
-// functions/api/record.js (注意目录改为 functions)
-const PUBLIC_FIELDS = ['资产名称', '资产编号', '资产状态'];
+// functions/api/record.js
+const PUBLIC_FIELDS_FALLBACK = ['资产名称', '资产编号', '资产状态'];
 
+// ==================== 缓存配置 ====================
+let cachedFieldConfig = null;
+let configCacheTime = 0;
+const CONFIG_CACHE_TTL = 60 * 1000; // 1分钟
+
+async function getFieldConfig(env) {
+  const now = Date.now();
+  if (cachedFieldConfig && now < configCacheTime) return cachedFieldConfig;
+  try {
+    let config = await env.CONFIG_KV?.get('field_visibility', 'json');
+    if (!config) {
+      config = { publicFields: PUBLIC_FIELDS_FALLBACK, hiddenFields: [] };
+    }
+    cachedFieldConfig = config;
+    configCacheTime = now + CONFIG_CACHE_TTL;
+    return config;
+  } catch (err) {
+    console.error('Failed to load field config:', err);
+    return { publicFields: PUBLIC_FIELDS_FALLBACK, hiddenFields: [] };
+  }
+}
+
+function filterFields(fields, isLoggedIn, config) {
+  const { publicFields, hiddenFields } = config;
+  let allowedKeys = isLoggedIn ? Object.keys(fields) : publicFields;
+  allowedKeys = allowedKeys.filter(key => !hiddenFields.includes(key));
+  const result = {};
+  for (const key of allowedKeys) {
+    result[key] = fields[key] !== undefined ? fields[key] : null;
+  }
+  return result;
+}
+
+// ==================== 辅助函数 ====================
 function jsonResponse(data, status = 200, isError = false) {
   return new Response(
     JSON.stringify({
@@ -116,16 +150,12 @@ async function getRecordList(tenantToken, isLoggedIn, env) {
   const json = await res.json();
   if (json.code !== 0) throw new Error(`list error: ${JSON.stringify(json)}`);
   const items = json.data.items || [];
+
+  const config = await getFieldConfig(env);
   return items.map((item) => {
     const fields = item.fields || {};
-    if (isLoggedIn) {
-      return { id: item.record_id, ...fields };
-    }
-    const publicData = { id: item.record_id };
-    for (const key of PUBLIC_FIELDS) {
-      publicData[key] = fields[key] || null;
-    }
-    return publicData;
+    const filtered = filterFields(fields, isLoggedIn, config);
+    return { id: item.record_id, ...filtered };
   });
 }
 
@@ -138,14 +168,9 @@ async function getRecordDetail(tenantToken, recordId, isLoggedIn, env) {
   const json = await res.json();
   if (json.code !== 0) throw new Error(`detail error: ${JSON.stringify(json)}`);
   const fields = json.data.record.fields || {};
-  if (isLoggedIn) {
-    return { id: recordId, ...fields };
-  }
-  const publicData = { id: recordId };
-  for (const key of PUBLIC_FIELDS) {
-    publicData[key] = fields[key] || null;
-  }
-  return publicData;
+  const config = await getFieldConfig(env);
+  const filtered = filterFields(fields, isLoggedIn, config);
+  return { id: recordId, ...filtered };
 }
 
 async function updateRecord(userToken, recordId, fields, env) {
