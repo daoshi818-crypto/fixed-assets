@@ -1,306 +1,674 @@
+```html
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>资产管理 - 飞书多维表格</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f7fb; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
-        h1 { font-size: 1.8rem; font-weight: 600; color: #1e293b; margin: 0; }
-        .login-status { display: flex; align-items: center; gap: 12px; }
-        button { background: #3b82f6; color: white; border: none; padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
-        button:hover { background: #2563eb; }
-        button.logout-btn { background: #64748b; }
-        button.logout-btn:hover { background: #475569; }
-        button.save-btn { background: #3b82f6; }
-        .loading { text-align: center; padding: 40px; color: #64748b; }
-        .error { background: #fee2e2; color: #b91c1c; padding: 12px; border-radius: 8px; margin-bottom: 20px; }
-        .record-list { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
-        .record-item { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background 0.1s; }
-        .record-item:hover { background: #f8fafc; }
-        .record-item.selected { background: #eff6ff; border-left: 4px solid #3b82f6; }
-        .record-title { font-weight: 600; color: #0f172a; }
-        .record-sub { font-size: 13px; color: #475569; margin-top: 4px; }
-        .detail-panel { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-top: 24px; }
-        .field-group { margin-bottom: 16px; }
-        label { display: block; font-weight: 500; margin-bottom: 6px; color: #334155; }
-        input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
-        .readonly-field { background: #f8fafc; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; color: #1e293b; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        .hidden { display: none; }
-        .note { font-size: 13px; color: #64748b; margin-top: 16px; text-align: center; }
-        @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; gap: 12px; } }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>资产管理系统</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    background: #f5f7fb;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #1e293b;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 28px;
+}
+
+button {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    cursor: pointer;
+    background: #2563eb;
+    color: white;
+    font-size: 14px;
+}
+
+button:hover {
+    opacity: .9;
+}
+
+.logout-btn {
+    background: #64748b;
+}
+
+.hidden {
+    display: none;
+}
+
+.record-list {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+
+.record-item {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    cursor: pointer;
+}
+
+.record-item:hover {
+    background: #f8fafc;
+}
+
+.record-item.selected {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+}
+
+.record-title {
+    font-weight: 600;
+}
+
+.record-sub {
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.detail-panel {
+    background: white;
+    margin-top: 24px;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(2,1fr);
+    gap: 16px;
+}
+
+.field-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+}
+
+.readonly {
+    padding: 10px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.loading {
+    padding: 40px;
+    text-align: center;
+    color: #64748b;
+}
+
+.error {
+    background: #fee2e2;
+    color: #b91c1c;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.note {
+    margin-top: 20px;
+    color: #64748b;
+    font-size: 13px;
+}
+</style>
 </head>
+
 <body>
+
 <div class="header">
     <h1>📦 资产管理</h1>
-    <div class="login-status" id="loginStatus">
-        <span id="userInfo"></span>
-        <button id="loginBtn" class="login-btn">飞书登录</button>
-        <button id="logoutBtn" class="logout-btn hidden">退出</button>
+
+    <div>
+        <span id="userInfo">未登录</span>
+
+        <button id="loginBtn">
+            飞书登录
+        </button>
+
+        <button
+            id="logoutBtn"
+            class="logout-btn hidden"
+        >
+            退出
+        </button>
     </div>
 </div>
 
-<div id="listContainer" class="record-list"><div class="loading">加载列表中...</div></div>
-<div id="detailContainer" class="detail-panel hidden">
-    <h3>资产详情</h3>
-    <div id="detailFields"></div>
-    <div id="editActions" class="hidden"><button id="saveBtn" class="save-btn">保存修改</button></div>
+<div id="listContainer" class="record-list">
+    <div class="loading">
+        加载中...
+    </div>
 </div>
-<div class="note">💡 未登录只能查看公开字段（名称、编号、状态）。登录后可查看并编辑全部信息。</div>
+
+<div
+    id="detailContainer"
+    class="detail-panel hidden"
+>
+    <h3>资产详情</h3>
+
+    <div id="detailFields"></div>
+
+    <div
+        id="editActions"
+        class="hidden"
+        style="margin-top:20px;"
+    >
+        <button id="saveBtn">
+            保存修改
+        </button>
+    </div>
+</div>
+
+<div class="note">
+    未登录只能查看公开字段，登录后可查看并编辑全部信息
+</div>
 
 <script>
-    // 飞书授权配置（这些值会从后端获取？不，前端必须知道自己的 App ID 和回调地址）
-    const APP_ID = 'cli_a9744fcb1a391cc8';
-    const REDIRECT_URI = 'https://86782b78.fixed-assets.pages.dev/api/login';
 
-    let accessToken = localStorage.getItem('accessToken');
-    let currentRecordId = null;
-    let isLoggedIn = !!accessToken;
+const APP_ID = 'cli_a9744fcb1a391cc8';
 
-    const loginBtn = document.getElementById('loginBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const userInfoSpan = document.getElementById('userInfo');
-    const listContainer = document.getElementById('listContainer');
-    const detailContainer = document.getElementById('detailContainer');
-    const detailFieldsDiv = document.getElementById('detailFields');
-    const editActionsDiv = document.getElementById('editActions');
+/*
+  关键修复：
+  redirect_uri 必须是前端页面
+*/
+const REDIRECT_URI = window.location.origin;
 
-    // 安全提取飞书字段值（处理对象、数组）
-    function getFieldValue(field) {
-        if (field === null || field === undefined) return '';
-        if (typeof field === 'string') return field;
-        if (typeof field === 'number') return String(field);
-        if (Array.isArray(field)) {
-            if (field.length === 0) return '';
-            if (field[0]?.name) return field.map(item => item.name).join(', ');
-            if (field[0]?.text) return field.map(item => item.text).join(', ');
-            return field.map(item => getFieldValue(item)).join(', ');
-        }
-        if (typeof field === 'object') {
-            if (field.text !== undefined) return field.text;
-            if (field.name !== undefined) return field.name;
-            if (field.label !== undefined) return field.label;
-            return JSON.stringify(field);
-        }
+let accessToken =
+    localStorage.getItem('accessToken') || '';
+
+let isLoggedIn = !!accessToken;
+
+let currentRecordId = null;
+
+const loginBtn =
+    document.getElementById('loginBtn');
+
+const logoutBtn =
+    document.getElementById('logoutBtn');
+
+const userInfo =
+    document.getElementById('userInfo');
+
+const listContainer =
+    document.getElementById('listContainer');
+
+const detailContainer =
+    document.getElementById('detailContainer');
+
+const detailFields =
+    document.getElementById('detailFields');
+
+const editActions =
+    document.getElementById('editActions');
+
+function escapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;');
+}
+
+function getFieldValue(field) {
+
+    if (field === null || field === undefined)
+        return '';
+
+    if (typeof field === 'string')
+        return field;
+
+    if (typeof field === 'number')
         return String(field);
+
+    if (Array.isArray(field)) {
+        return field
+            .map(item => {
+                if (item?.text)
+                    return item.text;
+
+                if (item?.name)
+                    return item.name;
+
+                return String(item);
+            })
+            .join(', ');
     }
 
-    function escapeHtml(str) {
-        if (str === undefined || str === null) return '';
-        return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
+    if (typeof field === 'object') {
+
+        if (field.text)
+            return field.text;
+
+        if (field.name)
+            return field.name;
+
+        return JSON.stringify(field);
     }
 
-    function showError(msg) {
-        const errDiv = document.createElement('div');
-        errDiv.className = 'error';
-        errDiv.innerText = msg;
-        document.querySelector('.header').insertAdjacentElement('afterend', errDiv);
-        setTimeout(() => errDiv.remove(), 4000);
+    return String(field);
+}
+
+function showError(msg) {
+
+    const div = document.createElement('div');
+
+    div.className = 'error';
+
+    div.innerText = msg;
+
+    document.body.prepend(div);
+
+    setTimeout(() => {
+        div.remove();
+    }, 4000);
+}
+
+function updateUI() {
+
+    if (isLoggedIn) {
+
+        userInfo.innerText = '✅ 已登录';
+
+        loginBtn.classList.add('hidden');
+
+        logoutBtn.classList.remove('hidden');
+
+    } else {
+
+        userInfo.innerText = '未登录';
+
+        loginBtn.classList.remove('hidden');
+
+        logoutBtn.classList.add('hidden');
+    }
+}
+
+async function api(url, options = {}) {
+
+    const headers = {
+        ...(options.headers || {})
+    };
+
+    if (accessToken) {
+        headers.Authorization =
+            `Bearer ${accessToken}`;
     }
 
-    function updateUI() {
-        if (isLoggedIn && accessToken) {
-            loginBtn.classList.add('hidden');
-            logoutBtn.classList.remove('hidden');
-            userInfoSpan.innerText = '✅ 已登录';
-        } else {
-            loginBtn.classList.remove('hidden');
-            logoutBtn.classList.add('hidden');
-            userInfoSpan.innerText = '未登录';
-        }
+    const res = await fetch(url, {
+        ...options,
+        headers
+    });
+
+    const json = await res.json();
+
+    if (json.code !== 0) {
+        throw new Error(
+            json.message || '请求失败'
+        );
     }
 
-    async function handleAuthCallback() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-        if (!code) return false;
-        try {
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
-            });
-            const json = await res.json();
-            if (json.code === 0 && json.data?.accessToken) {
-                accessToken = json.data.accessToken;
-                localStorage.setItem('accessToken', accessToken);
-                isLoggedIn = true;
-                const cleanUrl = window.location.origin + window.location.pathname;
-                window.history.replaceState({}, document.title, cleanUrl);
-                updateUI();
-                await loadList();
-                return true;
-            } else {
-                throw new Error(json.message || '登录失败');
-            }
-        } catch (err) {
-            console.error(err);
-            showError('登录失败: ' + err.message);
-            return false;
-        }
-    }
+    return json.data;
+}
 
-    function logout() {
-        localStorage.removeItem('accessToken');
-        accessToken = null;
-        isLoggedIn = false;
-        updateUI();
-        currentRecordId = null;
-        detailContainer.classList.add('hidden');
-        loadList();
-    }
+async function handleAuthCallback() {
 
-    async function fetchList() {
-        const headers = {};
-        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-        const res = await fetch('/api/record?type=list', { headers });
-        const json = await res.json();
-        if (json.code !== 0) throw new Error(json.message);
-        return json.data;
-    }
+    const params =
+        new URLSearchParams(location.search);
 
-    async function fetchDetail(id) {
-        const headers = {};
-        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-        const res = await fetch(`/api/record?type=detail&id=${id}`, { headers });
-        const json = await res.json();
-        if (json.code !== 0) throw new Error(json.message);
-        return json.data;
-    }
+    const code = params.get('code');
 
-    async function updateRecord(id, fields) {
-        if (!accessToken) throw new Error('未登录');
-        const res = await fetch('/api/record?action=update', {
+    if (!code)
+        return;
+
+    try {
+
+        const data = await api('/api/login', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`
+                'Content-Type':
+                    'application/json'
             },
-            body: JSON.stringify({ id, fields })
+            body: JSON.stringify({
+                code
+            })
         });
-        const json = await res.json();
-        if (json.code !== 0) throw new Error(json.message);
-        return true;
-    }
 
-    async function loadList() {
-        listContainer.innerHTML = '<div class="loading">加载中...</div>';
+        accessToken = data.accessToken;
+
+        localStorage.setItem(
+            'accessToken',
+            accessToken
+        );
+
+        isLoggedIn = true;
+
+        /*
+          去掉 URL 中 code
+        */
+        history.replaceState(
+            {},
+            '',
+            location.pathname
+        );
+
+    } catch (err) {
+
+        console.error(err);
+
+        showError(
+            '登录失败：' + err.message
+        );
+    }
+}
+
+function startLogin() {
+
+    const url =
+        'https://open.feishu.cn/open-apis/authen/v1/authorize';
+
+    /*
+      scope 可按需增加
+    */
+    const scope =
+        'offline_access';
+
+    const authUrl =
+        `${url}?app_id=${APP_ID}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&scope=${encodeURIComponent(scope)}`;
+
+    location.href = authUrl;
+}
+
+function logout() {
+
+    localStorage.removeItem('accessToken');
+
+    accessToken = '';
+
+    isLoggedIn = false;
+
+    currentRecordId = null;
+
+    detailContainer.classList.add('hidden');
+
+    updateUI();
+
+    loadList();
+}
+
+async function loadList() {
+
+    listContainer.innerHTML =
+        '<div class="loading">加载中...</div>';
+
+    try {
+
+        const records =
+            await api('/api/record?type=list');
+
+        if (!records || !records.length) {
+
+            listContainer.innerHTML =
+                '<div class="loading">暂无数据</div>';
+
+            return;
+        }
+
+        listContainer.innerHTML = '';
+
+        records.forEach(record => {
+
+            const div =
+                document.createElement('div');
+
+            div.className =
+                'record-item';
+
+            if (record.id === currentRecordId) {
+                div.classList.add('selected');
+            }
+
+            const title =
+                getFieldValue(
+                    record['资产名称']
+                ) || '未命名';
+
+            const code =
+                getFieldValue(
+                    record['资产编号']
+                ) || '-';
+
+            const status =
+                getFieldValue(
+                    record['资产状态']
+                ) || '-';
+
+            div.innerHTML = `
+                <div class="record-title">
+                    ${escapeHtml(title)}
+                </div>
+
+                <div class="record-sub">
+                    编号: ${escapeHtml(code)}
+                    ｜ 状态: ${escapeHtml(status)}
+                </div>
+            `;
+
+            div.onclick = () => {
+                loadDetail(record.id);
+            };
+
+            listContainer.appendChild(div);
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        listContainer.innerHTML =
+            `<div class="error">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+async function loadDetail(id) {
+
+    currentRecordId = id;
+
+    detailContainer.classList.remove('hidden');
+
+    detailFields.innerHTML =
+        '<div class="loading">加载详情...</div>';
+
+    try {
+
+        const record =
+            await api(
+                `/api/record?type=detail&id=${id}`
+            );
+
+        if (isLoggedIn) {
+            renderEditable(record);
+        } else {
+            renderReadonly(record);
+        }
+
+    } catch (err) {
+
+        detailFields.innerHTML =
+            `<div class="error">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function renderReadonly(record) {
+
+    const fields = [
+        '资产名称',
+        '资产编号',
+        '资产状态'
+    ];
+
+    let html = '<div class="grid">';
+
+    fields.forEach(key => {
+
+        html += `
+            <div class="field-group">
+                <label>${key}</label>
+
+                <div class="readonly">
+                    ${escapeHtml(
+                        getFieldValue(record[key])
+                    )}
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+
+    detailFields.innerHTML = html;
+
+    editActions.classList.add('hidden');
+}
+
+function renderEditable(record) {
+
+    const fields = [
+        '资产名称',
+        '资产编号',
+        '资产类别',
+        '购置价格',
+        '使用部门',
+        '资产状态'
+    ];
+
+    let html = '<div class="grid">';
+
+    fields.forEach(key => {
+
+        html += `
+            <div class="field-group">
+
+                <label>${key}</label>
+
+                <input
+                    id="field_${key}"
+                    value="${escapeHtml(
+                        getFieldValue(record[key])
+                    )}"
+                />
+
+            </div>
+        `;
+    });
+
+    html += '</div>';
+
+    detailFields.innerHTML = html;
+
+    editActions.classList.remove('hidden');
+
+    const saveBtn =
+        document.getElementById('saveBtn');
+
+    const newBtn =
+        saveBtn.cloneNode(true);
+
+    saveBtn.replaceWith(newBtn);
+
+    newBtn.onclick = async () => {
+
+        const updated = {};
+
+        fields.forEach(key => {
+
+            updated[key] =
+                document.getElementById(
+                    `field_${key}`
+                ).value;
+        });
+
         try {
-            const records = await fetchList();
-            if (!records || records.length === 0) {
-                listContainer.innerHTML = '<div class="loading">暂无资产数据</div>';
-                return;
-            }
-            listContainer.innerHTML = '';
-            records.forEach(record => {
-                const div = document.createElement('div');
-                div.className = 'record-item' + (currentRecordId === record.id ? ' selected' : '');
-                div.setAttribute('data-id', record.id);
-                const title = getFieldValue(record['资产名称']) || '未命名';
-                const code = getFieldValue(record['资产编号']) || '无编号';
-                const status = getFieldValue(record['资产状态']) || '未知';
-                div.innerHTML = `<div class="record-title">${escapeHtml(title)}</div><div class="record-sub">编号: ${escapeHtml(code)} &nbsp;|&nbsp; 状态: ${escapeHtml(status)}</div>`;
-                div.addEventListener('click', () => loadDetail(record.id));
-                listContainer.appendChild(div);
-            });
+
+            await api(
+                '/api/record?action=update',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+                    body: JSON.stringify({
+                        id: currentRecordId,
+                        fields: updated
+                    })
+                }
+            );
+
+            alert('保存成功');
+
+            await loadList();
+
+            await loadDetail(
+                currentRecordId
+            );
+
         } catch (err) {
-            console.error(err);
-            listContainer.innerHTML = `<div class="loading error">加载失败: ${err.message}</div>`;
+
+            alert(
+                '保存失败：' + err.message
+            );
         }
-    }
+    };
+}
 
-    async function loadDetail(id) {
-        if (!id) return;
-        currentRecordId = id;
-        document.querySelectorAll('.record-item').forEach(item => {
-            if (item.getAttribute('data-id') === id) item.classList.add('selected');
-            else item.classList.remove('selected');
-        });
-        detailContainer.classList.remove('hidden');
-        detailFieldsDiv.innerHTML = '<div class="loading">加载详情...</div>';
-        editActionsDiv.classList.add('hidden');
-        try {
-            const record = await fetchDetail(id);
-            if (isLoggedIn) {
-                renderEditableForm(record);
-                editActionsDiv.classList.remove('hidden');
-            } else {
-                renderReadOnly(record);
-            }
-        } catch (err) {
-            detailFieldsDiv.innerHTML = `<div class="error">加载失败: ${err.message}</div>`;
-        }
-    }
+async function init() {
 
-    function renderEditableForm(record) {
-        const fieldsDef = [
-            { key: '资产名称', label: '资产名称' },
-            { key: '资产编号', label: '资产编号' },
-            { key: '资产类别', label: '资产类别' },
-            { key: '购置价格', label: '购置价格' },
-            { key: '使用部门', label: '使用部门' },
-            { key: '资产状态', label: '资产状态' }
-        ];
-        let html = '<div class="grid-2">';
-        for (const f of fieldsDef) {
-            const value = getFieldValue(record[f.key]);
-            html += `<div class="field-group"><label>${f.label}</label><input type="text" id="edit_${f.key}" value="${escapeHtml(value)}"></div>`;
-        }
-        html += '</div>';
-        detailFieldsDiv.innerHTML = html;
+    updateUI();
 
-        const saveBtn = document.getElementById('saveBtn');
-        const newBtn = saveBtn.cloneNode(true);
-        saveBtn.parentNode.replaceChild(newBtn, saveBtn);
-        newBtn.addEventListener('click', async () => {
-            const updated = {};
-            for (const f of fieldsDef) {
-                const input = document.getElementById(`edit_${f.key}`);
-                if (input) updated[f.key] = input.value;
-            }
-            try {
-                await updateRecord(currentRecordId, updated);
-                alert('保存成功');
-                await loadDetail(currentRecordId);
-                await loadList();
-            } catch (err) {
-                alert('保存失败: ' + err.message);
-            }
-        });
-        editActionsDiv.appendChild(newBtn);
-    }
+    await handleAuthCallback();
 
-    function renderReadOnly(record) {
-        const publicFields = ['资产名称', '资产编号', '资产状态'];
-        let html = '<div class="grid-2">';
-        for (const key of publicFields) {
-            const value = getFieldValue(record[key]) || '—';
-            html += `<div class="field-group"><label>${key}</label><div class="readonly-field">${escapeHtml(value)}</div></div>`;
-        }
-        html += '</div><div class="note" style="margin-top:16px;">🔒 登录后可查看全部字段并编辑</div>';
-        detailFieldsDiv.innerHTML = html;
-    }
+    updateUI();
 
-    function startLogin() {
-        const authorizeUrl = 'https://open.feishu.cn/open-apis/authen/v1/authorize';
-        const scope = 'contact:contact.base:readonly';
-        const fullUrl = `${authorizeUrl}?app_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
-        window.location.href = fullUrl;
-    }
+    await loadList();
 
-    async function init() {
-        updateUI();
-        await handleAuthCallback();
-        updateUI();
-        await loadList();
-        loginBtn.onclick = startLogin;
-        logoutBtn.onclick = logout;
-    }
-    init();
+    loginBtn.onclick = startLogin;
+
+    logoutBtn.onclick = logout;
+}
+
+init();
+
 </script>
+
 </body>
 </html>
+```
