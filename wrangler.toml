@@ -1,4 +1,4 @@
-if (!env.USER_TOKENS) {
-  console.error('KV binding missing');
-  return jsonResponse('KV binding not configured', 500, true);
-}
+name = "fixed-assets"
+[[kv_namespaces]]
+binding = "USER_TOKENS"
+id = "ns-7Ip9dfHaLgfp"
