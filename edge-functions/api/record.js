@@ -42,9 +42,9 @@ async function getTenantAccessToken(env) {
   return cachedTenantToken;
 }
 
-// ==================== 用户 token 管理（KV） ====================
-async function getUserTokenData(openId, env) {
-  const raw = await env.USER_TOKENS.get(openId);
+// ==================== 用户 token 管理（直接使用全局 USER_TOKENS） ====================
+async function getUserTokenData(openId) {
+  const raw = await USER_TOKENS.get(openId);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -53,8 +53,8 @@ async function getUserTokenData(openId, env) {
   }
 }
 
-async function saveUserTokenData(openId, data, env) {
-  await env.USER_TOKENS.put(openId, JSON.stringify(data));
+async function saveUserTokenData(openId, data) {
+  await USER_TOKENS.put(openId, JSON.stringify(data));
 }
 
 async function refreshUserToken(refreshToken, env) {
@@ -78,13 +78,13 @@ async function refreshUserToken(refreshToken, env) {
 }
 
 async function getValidUserAccessToken(openId, env) {
-  let data = await getUserTokenData(openId, env);
+  let data = await getUserTokenData(openId);
   if (!data) return null;
   const now = Date.now();
   if (data.expires_at > now + 5 * 60 * 1000) return data.access_token;
   try {
     const newData = await refreshUserToken(data.refresh_token, env);
-    await saveUserTokenData(openId, newData, env);
+    await saveUserTokenData(openId, newData);
     return newData.access_token;
   } catch (err) {
     console.error('refresh failed', err);
@@ -92,7 +92,7 @@ async function getValidUserAccessToken(openId, env) {
   }
 }
 
-async function verifyUserToken(token, env) {
+async function verifyUserToken(token) {
   const res = await fetch('https://open.feishu.cn/open-apis/authen/v1/user_info', {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -171,7 +171,6 @@ export async function onRequest(context) {
   const method = request.method;
 
   try {
-    // GET 请求：列表或详情
     if (method === 'GET') {
       const type = url.searchParams.get('type');
       if (!type) return jsonResponse('Missing type', 400, true);
@@ -183,7 +182,7 @@ export async function onRequest(context) {
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const userToken = authHeader.slice(7);
         try {
-          const userInfo = await verifyUserToken(userToken, env);
+          const userInfo = await verifyUserToken(userToken);
           const openId = userInfo.open_id;
           const validToken = await getValidUserAccessToken(openId, env);
           if (validToken) isLoggedIn = true;
@@ -193,19 +192,16 @@ export async function onRequest(context) {
       }
 
       if (type === 'list') {
-        const list = await getRecordList(tenantToken, isLoggedIn, env);
-        return jsonResponse(list);
+        return jsonResponse(await getRecordList(tenantToken, isLoggedIn, env));
       } else if (type === 'detail') {
         const id = url.searchParams.get('id');
         if (!id) return jsonResponse('Missing id', 400, true);
-        const detail = await getRecordDetail(tenantToken, id, isLoggedIn, env);
-        return jsonResponse(detail);
+        return jsonResponse(await getRecordDetail(tenantToken, id, isLoggedIn, env));
       } else {
         return jsonResponse('Invalid type', 400, true);
       }
     }
 
-    // POST 请求：更新记录
     if (method === 'POST') {
       const action = url.searchParams.get('action');
       if (action !== 'update') return jsonResponse('Invalid action', 400, true);
@@ -218,7 +214,7 @@ export async function onRequest(context) {
 
       let openId;
       try {
-        const userInfo = await verifyUserToken(userToken, env);
+        const userInfo = await verifyUserToken(userToken);
         openId = userInfo.open_id;
       } catch (err) {
         return jsonResponse('Invalid token', 401, true);
