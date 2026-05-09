@@ -10,25 +10,28 @@
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
         h1 { font-size: 1.8rem; font-weight: 600; color: #1e293b; margin: 0; }
         .login-status { display: flex; align-items: center; gap: 12px; }
-        button { background: #3b82f6; color: white; border: none; padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
+        button { background: #3b82f6; color: white; border: none; padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
         button:hover { background: #2563eb; }
         button.logout-btn { background: #64748b; }
         button.logout-btn:hover { background: #475569; }
+        button.save-btn { background: #3b82f6; }
         .loading { text-align: center; padding: 40px; color: #64748b; }
         .error { background: #fee2e2; color: #b91c1c; padding: 12px; border-radius: 8px; margin-bottom: 20px; }
         .record-list { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
-        .record-item { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; cursor: pointer; }
+        .record-item { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background 0.1s; }
+        .record-item:hover { background: #f8fafc; }
         .record-item.selected { background: #eff6ff; border-left: 4px solid #3b82f6; }
-        .record-title { font-weight: 600; }
+        .record-title { font-weight: 600; color: #0f172a; }
         .record-sub { font-size: 13px; color: #475569; margin-top: 4px; }
-        .detail-panel { background: white; border-radius: 12px; padding: 24px; margin-top: 24px; }
+        .detail-panel { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-top: 24px; }
         .field-group { margin-bottom: 16px; }
-        label { font-weight: 500; margin-bottom: 6px; display: block; }
-        input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
-        .readonly-field { background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+        label { display: block; font-weight: 500; margin-bottom: 6px; color: #334155; }
+        input, select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; }
+        .readonly-field { background: #f8fafc; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; color: #1e293b; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
         .hidden { display: none; }
         .note { font-size: 13px; color: #64748b; margin-top: 16px; text-align: center; }
+        @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; gap: 12px; } }
     </style>
 </head>
 <body>
@@ -36,144 +39,278 @@
     <h1>📦 资产管理</h1>
     <div class="login-status" id="loginStatus">
         <span id="userInfo"></span>
-        <button id="loginBtn">飞书登录</button>
-        <button id="logoutBtn" class="hidden">退出</button>
+        <button id="loginBtn" class="login-btn">飞书登录</button>
+        <button id="logoutBtn" class="logout-btn hidden">退出</button>
     </div>
 </div>
+
 <div id="listContainer" class="record-list"><div class="loading">加载列表中...</div></div>
-<div id="detailContainer" class="detail-panel hidden"><h3>资产详情</h3><div id="detailFields"></div><div id="editActions" class="hidden"><button id="saveBtn">保存修改</button></div></div>
+<div id="detailContainer" class="detail-panel hidden">
+    <h3>资产详情</h3>
+    <div id="detailFields"></div>
+    <div id="editActions" class="hidden"><button id="saveBtn" class="save-btn">保存修改</button></div>
+</div>
 <div class="note">💡 未登录只能查看公开字段（名称、编号、状态）。登录后可查看并编辑全部信息。</div>
 
 <script>
+    // 飞书授权配置
     const APP_ID = 'cli_a9744fcb1a391cc8';
     const REDIRECT_URI = 'https://86782b78.fixed-assets.pages.dev/api/login';
+
+    // 全局状态
     let accessToken = localStorage.getItem('accessToken');
     let currentRecordId = null;
     let isLoggedIn = !!accessToken;
 
-    function getFieldValue(f) {
-        if (f == null) return '';
-        if (typeof f === 'string') return f;
-        if (typeof f === 'number') return String(f);
-        if (Array.isArray(f)) {
-            if (f.length && f[0].name) return f[0].name;
-            if (f.length && f[0].text) return f[0].text;
-            return f.map(v => getFieldValue(v)).join(', ');
+    // DOM 元素
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userInfoSpan = document.getElementById('userInfo');
+    const listContainer = document.getElementById('listContainer');
+    const detailContainer = document.getElementById('detailContainer');
+    const detailFieldsDiv = document.getElementById('detailFields');
+    const editActionsDiv = document.getElementById('editActions');
+
+    // ========== 辅助函数：安全提取飞书字段文本 ==========
+    function getFieldValue(field) {
+        if (field === null || field === undefined) return '';
+        if (typeof field === 'string') return field;
+        if (typeof field === 'number') return String(field);
+        if (Array.isArray(field)) {
+            if (field.length === 0) return '';
+            // 负责人通常是 [{name: "张三"}]
+            if (field[0].name) return field.map(item => item.name).join(', ');
+            if (field[0].text) return field.map(item => item.text).join(', ');
+            return field.map(item => getFieldValue(item)).join(', ');
         }
-        if (typeof f === 'object') {
-            if (f.text !== undefined) return f.text;
-            if (f.name !== undefined) return f.name;
-            if (f.label !== undefined) return f.label;
-            return JSON.stringify(f);
+        if (typeof field === 'object') {
+            if (field.text !== undefined) return field.text;
+            if (field.name !== undefined) return field.name;
+            if (field.label !== undefined) return field.label;
+            return JSON.stringify(field);
         }
-        return String(f);
+        return String(field);
     }
-    function escapeHtml(s) { return String(s).replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
-    function showError(msg) { const d=document.createElement('div'); d.className='error'; d.innerText=msg; document.querySelector('.header').after(d); setTimeout(()=>d.remove(),4000); }
+
+    function escapeHtml(str) {
+        if (str === undefined || str === null) return '';
+        return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
+    }
+
+    function showError(msg) {
+        const errDiv = document.createElement('div');
+        errDiv.className = 'error';
+        errDiv.innerText = msg;
+        document.querySelector('.header').insertAdjacentElement('afterend', errDiv);
+        setTimeout(() => errDiv.remove(), 4000);
+    }
+
     function updateUI() {
-        if(isLoggedIn && accessToken) { loginBtn.classList.add('hidden'); logoutBtn.classList.remove('hidden'); userInfoSpan.innerText='✅ 已登录'; }
-        else { loginBtn.classList.remove('hidden'); logoutBtn.classList.add('hidden'); userInfoSpan.innerText='未登录'; }
+        if (isLoggedIn && accessToken) {
+            loginBtn.classList.add('hidden');
+            logoutBtn.classList.remove('hidden');
+            userInfoSpan.innerText = '✅ 已登录';
+        } else {
+            loginBtn.classList.remove('hidden');
+            logoutBtn.classList.add('hidden');
+            userInfoSpan.innerText = '未登录';
+        }
     }
+
+    // 处理 OAuth 回调
     async function handleAuthCallback() {
-        const code = new URLSearchParams(location.search).get('code');
-        if(!code) return false;
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        if (!code) return false;
         try {
-            const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({code}) });
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
             const json = await res.json();
-            if(json.code===0 && json.data?.accessToken) {
+            if (json.code === 0 && json.data && json.data.accessToken) {
                 accessToken = json.data.accessToken;
                 localStorage.setItem('accessToken', accessToken);
                 isLoggedIn = true;
-                history.replaceState({}, '', location.pathname);
+                // 清除 URL 参数
+                const cleanUrl = window.location.origin + window.location.pathname;
+                window.history.replaceState({}, document.title, cleanUrl);
                 updateUI();
-                await loadList();
+                await loadList();      // 重新加载数据
                 return true;
-            } else throw new Error(json.message);
-        } catch(e) { showError('登录失败: '+e.message); return false; }
+            } else {
+                throw new Error(json.message || '登录失败');
+            }
+        } catch (err) {
+            console.error(err);
+            showError('登录失败: ' + err.message);
+            return false;
+        }
     }
-    function logout() { localStorage.removeItem('accessToken'); accessToken=null; isLoggedIn=false; updateUI(); currentRecordId=null; detailContainer.classList.add('hidden'); loadList(); }
+
+    function logout() {
+        localStorage.removeItem('accessToken');
+        accessToken = null;
+        isLoggedIn = false;
+        updateUI();
+        currentRecordId = null;
+        detailContainer.classList.add('hidden');
+        loadList();
+    }
+
+    // ========== API 调用 ==========
     async function fetchList() {
-        const headers = accessToken ? {'Authorization':`Bearer ${accessToken}`} : {};
+        const headers = {};
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
         const res = await fetch('/api/record?type=list', { headers });
         const json = await res.json();
-        if(json.code!==0) throw new Error(json.message);
+        if (json.code !== 0) throw new Error(json.message);
         return json.data;
     }
+
     async function fetchDetail(id) {
-        const headers = accessToken ? {'Authorization':`Bearer ${accessToken}`} : {};
+        const headers = {};
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
         const res = await fetch(`/api/record?type=detail&id=${id}`, { headers });
         const json = await res.json();
-        if(json.code!==0) throw new Error(json.message);
+        if (json.code !== 0) throw new Error(json.message);
         return json.data;
     }
+
     async function updateRecord(id, fields) {
-        if(!accessToken) throw new Error('未登录');
-        const res = await fetch('/api/record?action=update', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${accessToken}`}, body:JSON.stringify({id, fields}) });
+        if (!accessToken) throw new Error('未登录');
+        const res = await fetch('/api/record?action=update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ id, fields })
+        });
         const json = await res.json();
-        if(json.code!==0) throw new Error(json.message);
+        if (json.code !== 0) throw new Error(json.message);
         return true;
     }
+
+    // ========== 渲染列表 ==========
     async function loadList() {
         listContainer.innerHTML = '<div class="loading">加载中...</div>';
         try {
             const records = await fetchList();
-            if(!records?.length) { listContainer.innerHTML = '<div class="loading">暂无资产数据</div>'; return; }
+            if (!records || records.length === 0) {
+                listContainer.innerHTML = '<div class="loading">暂无资产数据</div>';
+                return;
+            }
             listContainer.innerHTML = '';
             records.forEach(record => {
                 const div = document.createElement('div');
-                div.className = 'record-item' + (currentRecordId===record.id ? ' selected' : '');
+                div.className = 'record-item' + (currentRecordId === record.id ? ' selected' : '');
                 div.setAttribute('data-id', record.id);
                 const title = getFieldValue(record['资产名称']) || '未命名';
                 const code = getFieldValue(record['资产编号']) || '无编号';
                 const status = getFieldValue(record['资产状态']) || '未知';
-                div.innerHTML = `<div class="record-title">${escapeHtml(title)}</div><div class="record-sub">编号: ${escapeHtml(code)} | 状态: ${escapeHtml(status)}</div>`;
+                div.innerHTML = `<div class="record-title">${escapeHtml(title)}</div><div class="record-sub">编号: ${escapeHtml(code)} &nbsp;|&nbsp; 状态: ${escapeHtml(status)}</div>`;
                 div.addEventListener('click', () => loadDetail(record.id));
                 listContainer.appendChild(div);
             });
-        } catch(e) { listContainer.innerHTML = `<div class="loading error">加载失败: ${e.message}</div>`; }
+        } catch (err) {
+            console.error(err);
+            listContainer.innerHTML = `<div class="loading error">加载失败: ${err.message}</div>`;
+        }
     }
+
+    // ========== 渲染详情 ==========
     async function loadDetail(id) {
-        if(!id) return;
+        if (!id) return;
         currentRecordId = id;
-        document.querySelectorAll('.record-item').forEach(item => item.classList.toggle('selected', item.dataset.id === id));
+        // 高亮选中的记录
+        document.querySelectorAll('.record-item').forEach(item => {
+            if (item.getAttribute('data-id') === id) item.classList.add('selected');
+            else item.classList.remove('selected');
+        });
         detailContainer.classList.remove('hidden');
         detailFieldsDiv.innerHTML = '<div class="loading">加载详情...</div>';
         editActionsDiv.classList.add('hidden');
         try {
             const record = await fetchDetail(id);
-            if(isLoggedIn) {
-                const fields = ['资产名称','资产编号','资产类别','购置价格','使用部门','资产状态'];
-                let html = '<div class="grid-2">';
-                for(let k of fields) html += `<div class="field-group"><label>${k}</label><input type="text" id="edit_${k}" value="${escapeHtml(getFieldValue(record[k]))}"></div>`;
-                html += '</div>';
-                detailFieldsDiv.innerHTML = html;
+            if (isLoggedIn) {
+                renderEditableForm(record);
                 editActionsDiv.classList.remove('hidden');
-                const saveBtn = document.getElementById('saveBtn');
-                const newBtn = saveBtn.cloneNode(true);
-                saveBtn.parentNode.replaceChild(newBtn, saveBtn);
-                newBtn.onclick = async () => {
-                    const updated = {};
-                    for(let k of fields) updated[k] = document.getElementById(`edit_${k}`).value;
-                    try { await updateRecord(id, updated); alert('保存成功'); await loadDetail(id); await loadList(); } catch(e) { alert('保存失败: '+e.message); }
-                };
             } else {
-                const publicFields = ['资产名称','资产编号','资产状态'];
-                let html = '<div class="grid-2">';
-                for(let k of publicFields) html += `<div class="field-group"><label>${k}</label><div class="readonly-field">${escapeHtml(getFieldValue(record[k]))}</div></div>`;
-                html += '</div><div class="note">🔒 登录后可查看全部字段并编辑</div>';
-                detailFieldsDiv.innerHTML = html;
+                renderReadOnly(record);
             }
-        } catch(e) { detailFieldsDiv.innerHTML = `<div class="error">加载失败: ${e.message}</div>`; }
+        } catch (err) {
+            detailFieldsDiv.innerHTML = `<div class="error">加载失败: ${err.message}</div>`;
+        }
     }
-    function startLogin() { window.location.href = `https://open.feishu.cn/open-apis/authen/v1/authorize?app_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=contact:contact.base:readonly`; }
-    (async function init() {
+
+    function renderEditableForm(record) {
+        const fieldsDef = [
+            { key: '资产名称', label: '资产名称' },
+            { key: '资产编号', label: '资产编号' },
+            { key: '资产类别', label: '资产类别' },
+            { key: '购置价格', label: '购置价格' },
+            { key: '使用部门', label: '使用部门' },
+            { key: '资产状态', label: '资产状态' }
+        ];
+        let html = '<div class="grid-2">';
+        for (const f of fieldsDef) {
+            const raw = record[f.key];
+            const value = getFieldValue(raw);
+            html += `<div class="field-group"><label>${f.label}</label><input type="text" id="edit_${f.key}" value="${escapeHtml(value)}"></div>`;
+        }
+        html += '</div>';
+        detailFieldsDiv.innerHTML = html;
+
+        const saveBtn = document.getElementById('saveBtn');
+        const newBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newBtn, saveBtn);
+        newBtn.addEventListener('click', async () => {
+            const updated = {};
+            for (const f of fieldsDef) {
+                const input = document.getElementById(`edit_${f.key}`);
+                if (input) updated[f.key] = input.value;
+            }
+            try {
+                await updateRecord(currentRecordId, updated);
+                alert('保存成功');
+                await loadDetail(currentRecordId);
+                await loadList();
+            } catch (err) {
+                alert('保存失败: ' + err.message);
+            }
+        });
+        editActionsDiv.appendChild(newBtn);
+    }
+
+    function renderReadOnly(record) {
+        const publicFields = ['资产名称', '资产编号', '资产状态'];
+        let html = '<div class="grid-2">';
+        for (const key of publicFields) {
+            const value = getFieldValue(record[key]) || '—';
+            html += `<div class="field-group"><label>${key}</label><div class="readonly-field">${escapeHtml(value)}</div></div>`;
+        }
+        html += '</div><div class="note" style="margin-top:16px;">🔒 登录后可查看全部字段并编辑</div>';
+        detailFieldsDiv.innerHTML = html;
+    }
+
+    function startLogin() {
+        const authorizeUrl = 'https://open.feishu.cn/open-apis/authen/v1/authorize';
+        const scope = 'contact:contact.base:readonly';
+        const fullUrl = `${authorizeUrl}?app_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scope)}`;
+        window.location.href = fullUrl;
+    }
+
+    async function init() {
         updateUI();
         await handleAuthCallback();
         updateUI();
         await loadList();
         loginBtn.onclick = startLogin;
         logoutBtn.onclick = logout;
-    })();
+    }
+    init();
 </script>
 </body>
 </html>
