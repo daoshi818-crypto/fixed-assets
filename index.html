@@ -1,111 +1,494 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>固定资产系统</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-body{
-  font-family: Arial;
-  background:#f5f5f5;
-  padding:20px;
-}
-
-.card{
-  background:white;
-  padding:15px;
-  border-radius:10px;
-  margin-bottom:10px;
-  cursor:pointer;
-}
-
-.title{
-  font-weight:bold;
-}
-
-.small{
-  color:#666;
-  font-size:12px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资产管理 - 飞书多维表格</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fb;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin: 0;
+        }
+        .login-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        button.logout-btn {
+            background: #64748b;
+        }
+        button.logout-btn:hover {
+            background: #475569;
+        }
+        button.edit-btn {
+            background: #10b981;
+            margin-top: 12px;
+        }
+        button.edit-btn:hover {
+            background: #059669;
+        }
+        button.save-btn {
+            background: #3b82f6;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        .error {
+            background: #fee2e2;
+            color: #b91c1c;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .record-list {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .record-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .record-item:hover {
+            background: #f8fafc;
+        }
+        .record-item.selected {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+        }
+        .record-title {
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .record-sub {
+            font-size: 13px;
+            color: #475569;
+            margin-top: 4px;
+        }
+        .detail-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 24px;
+            margin-top: 24px;
+        }
+        .field-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #334155;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #fff;
+        }
+        input:disabled, select:disabled {
+            background: #f1f5f9;
+            color: #475569;
+        }
+        .readonly-field {
+            background: #f8fafc;
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            color: #1e293b;
+        }
+        .flex-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .hidden {
+            display: none;
+        }
+        .note {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 16px;
+            text-align: center;
+        }
+        @media (max-width: 640px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+        }
+    </style>
 </head>
-
 <body>
+<div class="header">
+    <h1>📦 资产管理</h1>
+    <div class="login-status" id="loginStatus">
+        <span id="userInfo"></span>
+        <button id="loginBtn" class="login-btn">飞书登录</button>
+        <button id="logoutBtn" class="logout-btn hidden">退出</button>
+    </div>
+</div>
 
-<div id="app">加载中...</div>
+<div id="listContainer" class="record-list">
+    <div class="loading">加载列表中...</div>
+</div>
+<div id="detailContainer" class="detail-panel hidden">
+    <h3>资产详情</h3>
+    <div id="detailFields"></div>
+    <div id="editActions" class="hidden">
+        <button id="saveBtn" class="save-btn">保存修改</button>
+    </div>
+</div>
+<div class="note">💡 未登录只能查看公开字段（名称、编号、状态）。登录后可查看并编辑全部信息。</div>
 
 <script>
+    // 全局变量
+    let accessToken = localStorage.getItem('accessToken');
+    let currentRecordId = null;
+    let currentRecordData = null;
+    let isLoggedIn = !!accessToken;
 
-function getText(v){
-  if (!v) return "-";
-  if (typeof v === "string" || typeof v === "number") return v;
-  if (Array.isArray(v)) return getText(v[0]);
-  if (v.text) return v.text;
-  if (v.name) return v.name;
-  return "-";
-}
+    // DOM 元素
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userInfoSpan = document.getElementById('userInfo');
+    const listContainer = document.getElementById('listContainer');
+    const detailContainer = document.getElementById('detailContainer');
+    const detailFieldsDiv = document.getElementById('detailFields');
+    const editActionsDiv = document.getElementById('editActions');
 
-function getId(){
-  const url = new URL(location.href);
-  return url.searchParams.get("id");
-}
+    // 环境变量：注意替换成你实际的飞书 App ID（前端必须知道）
+    const APP_ID = 'cli_a9744fcb1a391cc8';   // 替换成你的真实 App ID
+    const REDIRECT_URI = 'https://86782b78.fixed-assets.pages.dev/api/login';
 
-// =====================
-// 列表
-// =====================
-async function loadList(){
+    // ================= 工具函数 =================
+    function showError(msg) {
+        const errDiv = document.createElement('div');
+        errDiv.className = 'error';
+        errDiv.innerText = msg;
+        // 插入到顶部
+        const container = document.querySelector('.header');
+        container.insertAdjacentElement('afterend', errDiv);
+        setTimeout(() => errDiv.remove(), 4000);
+    }
 
-  const res = await fetch("/api/record?type=list");
-  const json = await res.json();
+    // 更新登录 UI
+    function updateUI() {
+        if (isLoggedIn && accessToken) {
+            loginBtn.classList.add('hidden');
+            logoutBtn.classList.remove('hidden');
+            userInfoSpan.innerText = '✅ 已登录';
+        } else {
+            loginBtn.classList.remove('hidden');
+            logoutBtn.classList.add('hidden');
+            userInfoSpan.innerText = '未登录';
+        }
+    }
 
-  document.getElementById("app").innerHTML =
-    json.data.map(i => `
-      <div class="card" onclick="go('${i.id}')">
-        <div class="title">${i.编号} - ${i.名称}</div>
-        <div class="small">${i.状态}</div>
-      </div>
-    `).join("");
-}
+    // 处理 OAuth 回调（从 URL 获取 code）
+    async function handleAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        if (!code) return false;
 
-// =====================
-// 详情
-// =====================
-async function loadDetail(id){
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            const json = await res.json();
+            if (json.code === 0 && json.data && json.data.accessToken) {
+                accessToken = json.data.accessToken;
+                localStorage.setItem('accessToken', accessToken);
+                isLoggedIn = true;
+                // 清除 URL 中的 code 参数
+                const newUrl = window.location.origin + window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+                updateUI();
+                await loadList();      // 重新加载列表（现在会返回完整字段）
+                return true;
+            } else {
+                throw new Error(json.message || '登录失败');
+            }
+        } catch (err) {
+            console.error(err);
+            showError('登录失败: ' + err.message);
+            return false;
+        }
+    }
 
-  const res = await fetch(`/api/record?id=${id}`);
-  const json = await res.json();
+    // 登出
+    function logout() {
+        localStorage.removeItem('accessToken');
+        accessToken = null;
+        isLoggedIn = false;
+        updateUI();
+        // 重置当前选中和详情面板
+        currentRecordId = null;
+        detailContainer.classList.add('hidden');
+        loadList();  // 刷新列表（仅公开字段）
+    }
 
-  const d = json.data;
+    // ================= API 调用 =================
+    async function fetchList() {
+        const headers = {};
+        if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+        const res = await fetch('/api/record?type=list', { headers });
+        const json = await res.json();
+        if (json.code !== 0) throw new Error(json.message);
+        return json.data;
+    }
 
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <div class="title">📦 ${d.资产名称}</div>
-      <p>编号：${d.资产编号}</p>
-      <p>类别：${d.资产类别}</p>
-      <p>状态：${d.状态}</p>
-      <p>部门：${d.使用部门}</p>
-      <p>负责人：${d.负责人}</p>
-      <p>价格：${d.购置价格}</p>
-    </div>
-  `;
-}
+    async function fetchDetail(id) {
+        const headers = {};
+        if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+        const res = await fetch(`/api/record?type=detail&id=${id}`, { headers });
+        const json = await res.json();
+        if (json.code !== 0) throw new Error(json.message);
+        return json.data;
+    }
 
-// =====================
-function go(id){
-  location.href = "?id=" + id;
-}
+    async function updateRecord(id, fields) {
+        if (!accessToken) throw new Error('未登录');
+        const res = await fetch('/api/record?action=update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ id, fields })
+        });
+        const json = await res.json();
+        if (json.code !== 0) throw new Error(json.message);
+        return true;
+    }
 
-// =====================
-const id = getId();
+    // ================= 渲染列表 =================
+    async function loadList() {
+        listContainer.innerHTML = '<div class="loading">加载中...</div>';
+        try {
+            const records = await fetchList();
+            if (!records || records.length === 0) {
+                listContainer.innerHTML = '<div class="loading">暂无资产数据</div>';
+                return;
+            }
+            // 渲染列表项
+            listContainer.innerHTML = '';
+            records.forEach(record => {
+                const div = document.createElement('div');
+                div.className = 'record-item' + (currentRecordId === record.id ? ' selected' : '');
+                div.setAttribute('data-id', record.id);
+                // 显示名称、编号、状态（未登录也只有这些）
+                const title = record['资产名称'] || '未命名';
+                const code = record['资产编号'] || '无编号';
+                const status = record['资产状态'] || '未知';
+                div.innerHTML = `
+                    <div class="record-title">${escapeHtml(title)}</div>
+                    <div class="record-sub">编号: ${escapeHtml(code)} &nbsp;|&nbsp; 状态: ${escapeHtml(status)}</div>
+                `;
+                div.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    loadDetail(record.id);
+                });
+                listContainer.appendChild(div);
+            });
+        } catch (err) {
+            console.error(err);
+            listContainer.innerHTML = `<div class="loading error">加载失败: ${err.message}</div>`;
+        }
+    }
 
-if (id) {
-  loadDetail(id);
-} else {
-  loadList();
-}
+    // ================= 渲染详情（根据登录状态决定可编辑性）=================
+    async function loadDetail(id) {
+        if (!id) return;
+        currentRecordId = id;
+        // 高亮列表选中项
+        document.querySelectorAll('.record-item').forEach(item => {
+            if (item.getAttribute('data-id') === id) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+        });
 
+        detailContainer.classList.remove('hidden');
+        detailFieldsDiv.innerHTML = '<div class="loading">加载详情...</div>';
+        editActionsDiv.classList.add('hidden');
+
+        try {
+            const record = await fetchDetail(id);
+            currentRecordData = record;
+
+            // 根据登录状态决定显示编辑表单还是只读文本
+            if (isLoggedIn) {
+                renderEditableForm(record);
+                editActionsDiv.classList.remove('hidden');
+            } else {
+                renderReadOnly(record);
+                editActionsDiv.classList.add('hidden');
+            }
+        } catch (err) {
+            detailFieldsDiv.innerHTML = `<div class="error">加载失败: ${err.message}</div>`;
+        }
+    }
+
+    // 登录用户：可编辑全部字段
+    function renderEditableForm(record) {
+        const fieldsDef = [
+            { key: '资产名称', label: '资产名称', type: 'text' },
+            { key: '资产编号', label: '资产编号', type: 'text' },
+            { key: '资产类别', label: '资产类别', type: 'text' },
+            { key: '购置价格', label: '购置价格', type: 'text' },
+            { key: '使用部门', label: '使用部门', type: 'text' },
+            { key: '资产状态', label: '资产状态', type: 'text' },
+            // 如果有日期、负责人等其他字段可继续添加
+        ];
+        let html = '<div class="grid-2">';
+        for (const field of fieldsDef) {
+            const value = record[field.key] !== undefined ? record[field.key] : '';
+            html += `
+                <div class="field-group">
+                    <label>${field.label}</label>
+                    <input type="text" id="edit_${field.key}" value="${escapeHtml(String(value))}" placeholder="请输入${field.label}">
+                </div>
+            `;
+        }
+        html += '</div>';
+        detailFieldsDiv.innerHTML = html;
+        // 保存按钮事件
+        const saveBtn = document.getElementById('saveBtn');
+        // 移除旧监听器避免重复绑定
+        const newSaveBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+        newSaveBtn.addEventListener('click', async () => {
+            const updatedFields = {};
+            for (const field of fieldsDef) {
+                const input = document.getElementById(`edit_${field.key}`);
+                if (input) updatedFields[field.key] = input.value;
+            }
+            try {
+                await updateRecord(currentRecordId, updatedFields);
+                alert('保存成功');
+                // 重新加载当前详情和列表
+                await loadDetail(currentRecordId);
+                await loadList();
+            } catch (err) {
+                alert('保存失败: ' + err.message);
+            }
+        });
+        document.getElementById('editActions').appendChild(newSaveBtn);
+    }
+
+    // 未登录用户：只读展示公开字段
+    function renderReadOnly(record) {
+        const publicFields = ['资产名称', '资产编号', '资产状态'];
+        let html = '<div class="grid-2">';
+        for (const key of publicFields) {
+            const value = record[key] || '—';
+            html += `
+                <div class="field-group">
+                    <label>${key}</label>
+                    <div class="readonly-field">${escapeHtml(String(value))}</div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        html += '<div class="note" style="margin-top:16px;">🔒 登录后可查看全部字段并编辑</div>';
+        detailFieldsDiv.innerHTML = html;
+    }
+
+    // 简单防XSS
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+            return c;
+        });
+    }
+
+    // 飞书登录跳转
+    function startLogin() {
+        const authorizeUrl = 'https://open.feishu.cn/open-apis/authen/v1/authorize';
+        const scope = 'contact:contact.base:readonly';  // 获取用户 open_id 的最小权限
+        const redirectUri = REDIRECT_URI;
+        const fullUrl = `${authorizeUrl}?app_id=${APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
+        window.location.href = fullUrl;
+    }
+
+    // ================= 初始化 =================
+    async function init() {
+        updateUI();
+        // 先处理回调（如果有code），这会设置 accessToken 并刷新登录状态
+        await handleAuthCallback();
+        updateUI();
+        // 加载列表
+        await loadList();
+        // 绑定事件
+        loginBtn.onclick = startLogin;
+        logoutBtn.onclick = () => logout();
+    }
+
+    init();
 </script>
-
 </body>
 </html>
