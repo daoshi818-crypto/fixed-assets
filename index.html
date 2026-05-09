@@ -19,15 +19,15 @@
       box-shadow:0 2px 10px rgba(0,0,0,0.1);
     }
 
+    .item{
+      margin:10px 0;
+      font-size:16px;
+    }
+
     .title{
       font-size:20px;
       font-weight:bold;
       margin-bottom:15px;
-    }
-
-    .item{
-      margin:10px 0;
-      font-size:16px;
     }
 
     .error{
@@ -51,8 +51,8 @@
 <script>
 
 function getId(){
-  const url = new URL(window.location.href);
-  return url.searchParams.get("id") || "recvj5sGwinyge";
+  const url = new URL(location.href);
+  return url.searchParams.get("id");
 }
 
 async function load(){
@@ -61,40 +61,38 @@ async function load(){
 
     const id = getId();
 
+    if (!id) {
+      showError("缺少资产ID");
+      return;
+    }
+
     const res = await fetch(`/api/record?id=${id}`);
     const json = await res.json();
 
-    // ❗ 后端错误处理
-    if (!json || json.code !== 0 || !json.data) {
-      document.getElementById("app").innerHTML = `
-        <div class="error">
-          ⚠️ 加载失败<br><br>
-          ${json?.msg || "未知错误"}
-        </div>
-      `;
+    if (!json || json.code !== 0) {
+      showError(json?.msg || "加载失败");
       return;
     }
 
     const d = json.data;
 
     document.getElementById("app").innerHTML = `
-      <div class="item">📌 资产名称：${d.资产名称 || "-"}</div>
-      <div class="item">🏷️ 资产编号：${d.资产编号 || "-"}</div>
-      <div class="item">📦 资产状态：${d.资产状态 || "-"}</div>
-      <div class="item">💰 购置价格：${d.购置价格 || "-"}</div>
-      <div class="item">🏢 使用部门：${d.使用部门 || "-"}</div>
-      <div class="item">👤 负责人：${d.负责人 || "-"}</div>
+      <div class="item">📌 资产名称：${d.资产名称}</div>
+      <div class="item">🏷️ 资产编号：${d.资产编号}</div>
+      <div class="item">📦 状态：${d.资产状态}</div>
+      <div class="item">💰 价格：${d.购置价格}</div>
+      <div class="item">🏢 部门：${d.使用部门}</div>
+      <div class="item">👤 负责人：${d.负责人}</div>
     `;
 
-  } catch (err) {
-
-    document.getElementById("app").innerHTML = `
-      <div class="error">
-        ❌ 系统错误：${err.message}
-      </div>
-    `;
-
+  } catch (e) {
+    showError(e.message);
   }
+}
+
+function showError(msg){
+  document.getElementById("app").innerHTML =
+    `<div class="error">⚠️ ${msg}</div>`;
 }
 
 load();
