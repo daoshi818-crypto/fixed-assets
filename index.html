@@ -7,12 +7,14 @@
     <style>
         * { box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f7fb; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
         h1 { margin: 0; font-size: 28px; }
         button { border: none; border-radius: 8px; padding: 8px 18px; cursor: pointer; background: #2563eb; color: white; font-size: 14px; font-weight: 500; }
         button:hover { background: #1e4bb3; }
         .logout-btn { background: #64748b; }
         .logout-btn:hover { background: #475569; }
+        .back-btn { background: #8b5cf6; }
+        .back-btn:hover { background: #7c3aed; }
         .hidden { display: none; }
         .record-list { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .record-item { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background 0.1s; }
@@ -21,52 +23,73 @@
         .record-title { font-weight: 600; }
         .record-sub { margin-top: 4px; color: #64748b; font-size: 13px; }
         .detail-panel { background: white; margin-top: 24px; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
-        .field-group label { display: block; margin-bottom: 6px; font-weight: 500; }
-        input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
-        .readonly { padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+        .field-group { break-inside: avoid; }
+        .field-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: #334155; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+        .readonly { padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; color: #1e293b; }
         .loading { padding: 40px; text-align: center; color: #64748b; }
         .error { background: #fee2e2; color: #b91c1c; padding: 12px; border-radius: 8px; margin-bottom: 20px; }
         .note { margin-top: 24px; color: #64748b; font-size: 13px; text-align: center; }
-        @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; gap: 12px; } }
+        .qr-btn { background: #10b981; margin-left: 8px; }
+        .qr-btn:hover { background: #059669; }
+        @media (max-width: 640px) {
+            .grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; align-items: stretch; }
+            .header div { display: flex; justify-content: space-between; }
+        }
     </style>
 </head>
 <body>
 <div class="header">
-    <h1>📦 资产管理</h1>
+    <div style="display: flex; align-items: center; gap: 12px;">
+        <h1>📦 资产管理</h1>
+        <button id="backToListBtn" class="back-btn hidden">← 返回列表</button>
+    </div>
     <div>
         <span id="userInfo">未登录</span>
         <button id="loginBtn">飞书登录</button>
         <button id="logoutBtn" class="logout-btn hidden">退出</button>
+        <button id="qrBtn" class="qr-btn hidden" style="display: none;">📱 生成二维码</button>
     </div>
 </div>
 
 <div id="listContainer" class="record-list"><div class="loading">加载中...</div></div>
 <div id="detailContainer" class="detail-panel hidden">
-    <h3>资产详情</h3>
+    <h3 id="detailTitle">资产详情</h3>
     <div id="detailFields"></div>
     <div id="editActions" class="hidden" style="margin-top:20px;"><button id="saveBtn">保存修改</button></div>
+    <div id="qrCodeContainer" style="margin-top: 20px; text-align: center;"></div>
 </div>
-<div class="note">💡 未登录只能查看公开字段（名称、编号、状态）。登录后可查看并编辑全部信息。</div>
+<div class="note">💡 未登录只能查看公开字段。登录后可查看并编辑全部字段。每个资产都有独立链接，可扫码分享。</div>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs2@0.0.2/qrcode.min.js"></script>
 <script>
+    // ================= 配置 =================
     const APP_ID = 'cli_a9744fcb1a391cc8';
     const REDIRECT_URI = `${window.location.origin}/api/login`;
 
     let accessToken = localStorage.getItem('accessToken') || '';
     let isLoggedIn = !!accessToken;
     let currentRecordId = null;
+    let currentRecordData = null;
 
+    // DOM 元素
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const backToListBtn = document.getElementById('backToListBtn');
+    const qrBtn = document.getElementById('qrBtn');
     const userInfoSpan = document.getElementById('userInfo');
     const listContainer = document.getElementById('listContainer');
     const detailContainer = document.getElementById('detailContainer');
     const detailFields = document.getElementById('detailFields');
     const editActions = document.getElementById('editActions');
+    const detailTitle = document.getElementById('detailTitle');
 
+    // ================= 辅助函数 =================
     function escapeHtml(str) { return String(str ?? '').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
 
+    // 提取飞书字段值（对象/数组 -> 文本）
     function getFieldValue(field) {
         if (field === null || field === undefined) return '';
         if (typeof field === 'string') return field;
@@ -125,7 +148,7 @@
         isLoggedIn = false;
         currentRecordId = null;
         updateUI();
-        detailContainer.classList.add('hidden');
+        showListMode();
         loadList();
     }
 
@@ -138,12 +161,21 @@
             accessToken = data.accessToken;
             localStorage.setItem('accessToken', accessToken);
             isLoggedIn = true;
-            history.replaceState({}, '', location.pathname);
+            // 清除 URL 中的 code 参数，保留可能的 id
+            const url = new URL(window.location.href);
+            url.searchParams.delete('code');
+            window.history.replaceState({}, '', url);
             updateUI();
-            await loadList();
+            // 如果当前是单个资产模式，刷新详情
+            if (currentRecordId) {
+                await loadDetail(currentRecordId);
+            } else {
+                await loadList();
+            }
         } catch (err) { showError('登录失败: ' + err.message); }
     }
 
+    // ================= 列表模式 =================
     async function loadList() {
         listContainer.innerHTML = '<div class="loading">加载中...</div>';
         try {
@@ -155,82 +187,176 @@
             listContainer.innerHTML = '';
             records.forEach(record => {
                 const div = document.createElement('div');
-                div.className = 'record-item' + (currentRecordId === record.id ? ' selected' : '');
+                div.className = 'record-item';
                 div.setAttribute('data-id', record.id);
-                div.innerHTML = `<div class="record-title">${escapeHtml(getFieldValue(record['资产名称']) || '未命名')}</div>
-                                 <div class="record-sub">编号: ${escapeHtml(getFieldValue(record['资产编号']) || '-')} ｜ 状态: ${escapeHtml(getFieldValue(record['资产状态']) || '-')}</div>`;
-                div.onclick = () => loadDetail(record.id);
+                const title = getFieldValue(record['资产名称']) || '未命名';
+                const code = getFieldValue(record['资产编号']) || '-';
+                const status = getFieldValue(record['资产状态']) || '-';
+                div.innerHTML = `<div class="record-title">${escapeHtml(title)}</div>
+                                 <div class="record-sub">编号: ${escapeHtml(code)} ｜ 状态: ${escapeHtml(status)}</div>`;
+                div.onclick = () => {
+                    // 切换到详情模式，更新 URL 参数
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('id', record.id);
+                    window.history.pushState({}, '', url);
+                    loadDetail(record.id);
+                };
                 listContainer.appendChild(div);
             });
-        } catch (err) { listContainer.innerHTML = `<div class="error">加载失败: ${err.message}</div>`; }
+            showListMode();
+        } catch (err) {
+            listContainer.innerHTML = `<div class="error">加载失败: ${err.message}</div>`;
+        }
     }
 
+    function showListMode() {
+        listContainer.classList.remove('hidden');
+        detailContainer.classList.add('hidden');
+        backToListBtn.classList.add('hidden');
+        qrBtn.style.display = 'none';
+        currentRecordId = null;
+        // 如果 URL 中有 id 参数，清除它
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('id')) {
+            url.searchParams.delete('id');
+            window.history.replaceState({}, '', url);
+        }
+    }
+
+    // ================= 详情模式 =================
     async function loadDetail(id) {
         currentRecordId = id;
+        listContainer.classList.add('hidden');
         detailContainer.classList.remove('hidden');
         detailFields.innerHTML = '<div class="loading">加载详情...</div>';
         editActions.classList.add('hidden');
+        backToListBtn.classList.remove('hidden');
+        qrBtn.style.display = 'inline-block';
+
         try {
             const record = await apiRequest(`/api/record?type=detail&id=${id}`);
+            currentRecordData = record;
+            detailTitle.innerText = `资产详情 - ${getFieldValue(record['资产名称']) || id}`;
             if (isLoggedIn) {
                 renderEditableForm(record);
                 editActions.classList.remove('hidden');
             } else {
                 renderReadonlyForm(record);
             }
-            document.querySelectorAll('.record-item').forEach(item => {
-                if (item.getAttribute('data-id') === id) item.classList.add('selected');
-                else item.classList.remove('selected');
+            // 生成二维码
+            const qrContainer = document.getElementById('qrCodeContainer');
+            qrContainer.innerHTML = '';
+            const currentUrl = `${window.location.origin}${window.location.pathname}?id=${id}`;
+            new QRCode(qrContainer, {
+                text: currentUrl,
+                width: 128,
+                height: 128,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
             });
-        } catch (err) { detailFields.innerHTML = `<div class="error">加载详情失败: ${err.message}</div>`; }
+        } catch (err) {
+            detailFields.innerHTML = `<div class="error">加载详情失败: ${err.message}</div>`;
+        }
     }
 
+    // 动态渲染只读表单（所有字段，未登录仅显示公开字段？但为了体验，未登录也应该看到全部字段但不可编辑？根据需求：未登录只能看指定字段，保持原逻辑）
+    // 但为了简化，未登录只展示 PUBLIC_FIELDS 列表。登录动态展示全部。
     function renderReadonlyForm(record) {
-        const fields = ['资产名称', '资产编号', '资产状态'];
+        // 原需求：未登录只显示公开字段
+        const publicFields = ['资产名称', '资产编号', '资产状态'];
         let html = '<div class="grid">';
-        fields.forEach(key => {
-            html += `<div class="field-group"><label>${key}</label><div class="readonly">${escapeHtml(getFieldValue(record[key]) || '—')}</div></div>`;
-        });
-        html += '</div>';
+        for (const key of publicFields) {
+            if (record.hasOwnProperty(key)) {
+                html += `<div class="field-group"><label>${escapeHtml(key)}</label><div class="readonly">${escapeHtml(getFieldValue(record[key]) || '—')}</div></div>`;
+            }
+        }
+        html += '</div><div class="note">🔒 登录后可查看并编辑全部字段</div>';
         detailFields.innerHTML = html;
     }
 
+    // 动态渲染可编辑表单（所有字段）
     function renderEditableForm(record) {
-        const fields = ['资产名称', '资产编号', '资产类别', '购置价格', '使用部门', '资产状态'];
+        // 获取所有字段（排除 id）
+        const fieldNames = Object.keys(record).filter(k => k !== 'id');
         let html = '<div class="grid">';
-        fields.forEach(key => {
-            html += `<div class="field-group"><label>${key}</label><input id="edit_${key.replace(/\s/g,'_')}" value="${escapeHtml(getFieldValue(record[key]))}"></div>`;
-        });
+        for (const key of fieldNames) {
+            const value = getFieldValue(record[key]);
+            html += `
+                <div class="field-group">
+                    <label>${escapeHtml(key)}</label>
+                    <input type="text" id="edit_${escapeHtml(key).replace(/\s/g, '_')}" value="${escapeHtml(value)}" placeholder="请输入${escapeHtml(key)}">
+                </div>
+            `;
+        }
         html += '</div>';
         detailFields.innerHTML = html;
 
+        // 绑定保存事件
         const saveBtn = document.getElementById('saveBtn');
         const newBtn = saveBtn.cloneNode(true);
         saveBtn.parentNode.replaceChild(newBtn, saveBtn);
         newBtn.onclick = async () => {
             const updated = {};
-            fields.forEach(key => {
-                updated[key] = document.getElementById(`edit_${key.replace(/\s/g,'_')}`).value;
-            });
+            for (const key of fieldNames) {
+                const inputId = `edit_${key.replace(/\s/g, '_')}`;
+                const input = document.getElementById(inputId);
+                if (input) updated[key] = input.value;
+            }
             try {
                 await apiRequest('/api/record?action=update', {
                     method: 'POST',
                     body: JSON.stringify({ id: currentRecordId, fields: updated })
                 });
                 alert('保存成功');
-                await loadList();
-                await loadDetail(currentRecordId);
-            } catch (err) { alert('保存失败: ' + err.message); }
+                await loadDetail(currentRecordId); // 刷新详情
+                await loadList(); // 刷新列表（如果后面返回列表）
+            } catch (err) {
+                alert('保存失败: ' + err.message);
+            }
         };
     }
 
+    // 返回列表
+    function backToList() {
+        showListMode();
+        loadList();
+    }
+
+    // 监听浏览器前进/后退，同步 URL 变化
+    window.addEventListener('popstate', () => {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        if (id) {
+            loadDetail(id);
+        } else {
+            showListMode();
+            loadList();
+        }
+    });
+
+    // ================= 初始化 =================
     async function init() {
         updateUI();
         await handleAuthCallback();
         updateUI();
-        await loadList();
+        // 检查 URL 是否有 id 参数
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        if (id) {
+            await loadDetail(id);
+        } else {
+            await loadList();
+        }
         loginBtn.onclick = startLogin;
         logoutBtn.onclick = logout;
+        backToListBtn.onclick = backToList;
+        qrBtn.onclick = () => {
+            if (currentRecordId) {
+                const url = `${window.location.origin}${window.location.pathname}?id=${currentRecordId}`;
+                prompt('复制此链接以生成二维码：', url);
+            }
+        };
     }
     init();
 </script>
