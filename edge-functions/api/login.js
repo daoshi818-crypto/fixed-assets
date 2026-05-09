@@ -1,4 +1,6 @@
 // edge-functions/api/login.js
+console.log('=== ENV keys ===', Object.keys(env));
+console.log('USER_TOKENS:', env.USER_TOKENS);
 export async function onRequestPost(context) {
   const { request, env } = context;
   const { APP_ID, APP_SECRET, REDIRECT_URI } = env;
