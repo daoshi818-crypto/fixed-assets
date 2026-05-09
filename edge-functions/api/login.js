@@ -1,6 +1,4 @@
 // edge-functions/api/login.js
-// EdgeOne Pages 环境：KV 绑定名称为 USER_TOKENS，全局可用
-
 export async function onRequestPost(context) {
   const { request, env } = context;
   const { APP_ID, APP_SECRET, REDIRECT_URI } = env;
@@ -11,7 +9,7 @@ export async function onRequestPost(context) {
       return jsonResponse('Missing code', 400, true);
     }
 
-    // 1. 用 code 换取 user_access_token 和 refresh_token
+    // 1. 用 code 换 user_access_token 和 refresh_token
     const tokenRes = await fetch('https://passport.feishu.cn/suite/passport/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -38,13 +36,13 @@ export async function onRequestPost(context) {
     }
     const openId = userJson.data.open_id;
 
-    // 3. 存储 token 到 KV（EdgeOne 中直接使用全局绑定 USER_TOKENS）
+    // 3. 存储 token 到 KV（使用 env.USER_TOKENS）
     const tokenData = {
       access_token: tokenJson.access_token,
       refresh_token: tokenJson.refresh_token,
       expires_at: Date.now() + tokenJson.expires_in * 1000,
     };
-    await USER_TOKENS.put(openId, JSON.stringify(tokenData));
+    await env.USER_TOKENS.put(openId, JSON.stringify(tokenData));
 
     // 4. 返回给前端
     return jsonResponse({
@@ -59,7 +57,6 @@ export async function onRequestPost(context) {
   }
 }
 
-// 统一响应格式
 function jsonResponse(data, status = 200, isError = false) {
   return new Response(
     JSON.stringify({
