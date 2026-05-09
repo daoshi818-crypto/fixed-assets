@@ -1,9 +1,6 @@
 // fixed-assets/functions/api/record.js
-// 配置常量，从环境变量读取
-const APP_ID = env.APP_ID;
-const APP_SECRET = env.APP_SECRET;
-const APP_TOKEN = env.APP_TOKEN;
-const TABLE_ID = env.TABLE_ID;
+// 环境变量：APP_ID, APP_SECRET, APP_TOKEN, TABLE_ID
+// KV 绑定：USER_TOKENS（存储用户 token）
 
 // 未登录用户可见字段
 const PUBLIC_FIELDS = ['资产名称', '资产编号', '资产状态'];
@@ -36,6 +33,9 @@ async function getTenantAccessToken(env) {
     return cachedTenantToken;
   }
 
+  const APP_ID = env.APP_ID;
+  const APP_SECRET = env.APP_SECRET;
+
   const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -50,23 +50,35 @@ async function getTenantAccessToken(env) {
   return cachedTenantToken;
 }
 
-// ==================== 用户 token 管理（KV 自动刷新） ====================
+// ==================== 用户 token 管理（KV + 自动刷新） ====================
 async function getUserTokenData(openId, env) {
-  const data = await env.USER_TOKENS.get(openId, 'json');
+  const kv = env.USER_TOKENS;
+  const data = await kv.get(openId, 'json');
   return data;
 }
 
+async function saveUserTokenData(openId, data, env) {
+  const kv = env.USER_TOKENS;
+  await kv.put(openId, JSON.stringify(data));
+}
+
 async function refreshUserToken(refreshToken, env) {
+  const APP_ID = env.APP_ID;
+  const APP_SECRET = env.APP_SECRET;
   const res = await fetch('https://open.feishu.cn/open-apis/authen/v1/refresh_access_token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       grant_type: 'refresh_token',
+      client_id: APP_ID,
+      client_secret: APP_SECRET,
       refresh_token: refreshToken,
     }),
   });
   const json = await res.json();
-  if (json.code !== 0) throw new Error(`refresh error: ${JSON.stringify(json)}`);
+  if (json.code !== 0) {
+    throw new Error(`refresh token error: ${JSON.stringify(json)}`);
+  }
   return {
     access_token: json.data.access_token,
     refresh_token: json.data.refresh_token,
@@ -83,7 +95,7 @@ async function getValidUserAccessToken(openId, env) {
   }
   try {
     const newData = await refreshUserToken(data.refresh_token, env);
-    await env.USER_TOKENS.put(openId, JSON.stringify(newData));
+    await saveUserTokenData(openId, newData, env);
     return newData.access_token;
   } catch (err) {
     console.error('refresh failed', err);
@@ -96,12 +108,16 @@ async function verifyUserToken(token, env) {
     headers: { Authorization: `Bearer ${token}` },
   });
   const json = await res.json();
-  if (json.code !== 0) throw new Error('Invalid token');
+  if (json.code !== 0) {
+    throw new Error('Invalid user token');
+  }
   return json.data.open_id;
 }
 
-// ==================== 多维表格业务逻辑 ====================
-async function getRecordList(tenantToken, isLoggedIn, env) {
+// ==================== 飞书多维表格业务逻辑 ====================
+async function getRecordList(tenantToken, isLoggedIn) {
+  const APP_TOKEN = env.APP_TOKEN;
+  const TABLE_ID = env.TABLE_ID;
   const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${APP_TOKEN}/tables/${TABLE_ID}/records/search`;
   const res = await fetch(url, {
     method: 'POST',
@@ -112,8 +128,9 @@ async function getRecordList(tenantToken, isLoggedIn, env) {
     body: JSON.stringify({}),
   });
   const json = await res.json();
-  if (json.code !== 0) throw new Error(`list error: ${JSON.stringify(json)}`);
-
+  if (json.code !== 0) {
+    throw new Error(`list error: ${JSON.stringify(json)}`);
+  }
   const items = json.data.items || [];
   return items.map((item) => {
     const fields = item.fields || {};
@@ -129,14 +146,17 @@ async function getRecordList(tenantToken, isLoggedIn, env) {
   });
 }
 
-async function getRecordDetail(tenantToken, recordId, isLoggedIn, env) {
+async function getRecordDetail(tenantToken, recordId, isLoggedIn) {
+  const APP_TOKEN = env.APP_TOKEN;
+  const TABLE_ID = env.TABLE_ID;
   const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${APP_TOKEN}/tables/${TABLE_ID}/records/${recordId}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${tenantToken}` },
   });
   const json = await res.json();
-  if (json.code !== 0) throw new Error(`detail error: ${JSON.stringify(json)}`);
-
+  if (json.code !== 0) {
+    throw new Error(`detail error: ${JSON.stringify(json)}`);
+  }
   const fields = json.data.record.fields || {};
   if (isLoggedIn) {
     return { id: recordId, ...fields };
@@ -149,7 +169,9 @@ async function getRecordDetail(tenantToken, recordId, isLoggedIn, env) {
   }
 }
 
-async function updateRecord(userToken, recordId, fields, env) {
+async function updateRecord(userToken, recordId, fields) {
+  const APP_TOKEN = env.APP_TOKEN;
+  const TABLE_ID = env.TABLE_ID;
   const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${APP_TOKEN}/tables/${TABLE_ID}/records/${recordId}`;
   const res = await fetch(url, {
     method: 'PUT',
@@ -160,7 +182,9 @@ async function updateRecord(userToken, recordId, fields, env) {
     body: JSON.stringify({ fields }),
   });
   const json = await res.json();
-  if (json.code !== 0) throw new Error(`update error: ${JSON.stringify(json)}`);
+  if (json.code !== 0) {
+    throw new Error(`update error: ${JSON.stringify(json)}`);
+  }
   return true;
 }
 
@@ -171,60 +195,55 @@ export async function onRequest(context) {
   const method = request.method;
 
   try {
-    // ---------- GET 请求：列表 或 详情 ----------
+    // ---------- GET 请求 ----------
     if (method === 'GET') {
       const type = url.searchParams.get('type');
       if (!type) {
         return jsonResponse('Missing parameter: type', 400, true);
       }
 
-      // 获取租户 token
       const tenantToken = await getTenantAccessToken(env);
 
-      // 判断是否登录（尝试解析 Authorization header）
+      // 判断是否登录
       let isLoggedIn = false;
       const authHeader = request.headers.get('Authorization');
-      let openId = null;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const userToken = authHeader.slice(7);
         try {
-          openId = await verifyUserToken(userToken, env);
-          // 验证通过后，确保 KV 中有最新的 token（如果快过期会自动刷新）
+          const openId = await verifyUserToken(userToken, env);
           const validToken = await getValidUserAccessToken(openId, env);
           if (validToken) isLoggedIn = true;
         } catch (e) {
-          // token 无效，视为未登录
+          // token 无效，保持未登录
         }
       }
 
       if (type === 'list') {
-        const list = await getRecordList(tenantToken, isLoggedIn, env);
+        const list = await getRecordList(tenantToken, isLoggedIn);
         return jsonResponse(list);
       } else if (type === 'detail') {
         const id = url.searchParams.get('id');
         if (!id) return jsonResponse('Missing id', 400, true);
-        const detail = await getRecordDetail(tenantToken, id, isLoggedIn, env);
+        const detail = await getRecordDetail(tenantToken, id, isLoggedIn);
         return jsonResponse(detail);
       } else {
         return jsonResponse('Invalid type', 400, true);
       }
     }
 
-    // ---------- POST 请求：更新记录（需要登录） ----------
+    // ---------- POST 请求：更新记录 ----------
     if (method === 'POST') {
       const action = url.searchParams.get('action');
       if (action !== 'update') {
         return jsonResponse('Invalid action', 400, true);
       }
 
-      // 必须提供用户 token
       const authHeader = request.headers.get('Authorization');
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return jsonResponse('Unauthorized: please login first', 401, true);
       }
       const userToken = authHeader.slice(7);
 
-      // 验证 token 并获取 openId
       let openId;
       try {
         openId = await verifyUserToken(userToken, env);
@@ -232,7 +251,6 @@ export async function onRequest(context) {
         return jsonResponse('Invalid or expired token, please login again', 401, true);
       }
 
-      // 获取有效的 access_token（若 refresh 失败则要求重新登录）
       const validToken = await getValidUserAccessToken(openId, env);
       if (!validToken) {
         return jsonResponse('Token expired, please login again', 401, true);
@@ -243,7 +261,7 @@ export async function onRequest(context) {
         return jsonResponse('Missing id or fields', 400, true);
       }
 
-      await updateRecord(validToken, id, fields, env);
+      await updateRecord(validToken, id, fields);
       return jsonResponse({ success: true });
     }
 
