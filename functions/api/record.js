@@ -1,3 +1,38 @@
+const APP_ID = "你的AppID";
+const APP_SECRET = "你的AppSecret";
+
+const APP_TOKEN = "NeCRbtLv2a6TfbsD3s1cHq3hncf";
+const TABLE_ID = "tblFGeKrKgVPxfAu";
+
+
+// 🔥 关键：必须存在这个函数
+async function getToken() {
+
+  const res = await fetch(
+    "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        app_id: APP_ID,
+        app_secret: APP_SECRET
+      })
+    }
+  );
+
+  const json = await res.json();
+
+  if (!json.tenant_access_token) {
+    throw new Error("token获取失败：" + JSON.stringify(json));
+  }
+
+  return json.tenant_access_token;
+}
+
+
+// ✅ 主接口
 export async function onRequestGet(context) {
 
   try {
@@ -9,7 +44,9 @@ export async function onRequestGet(context) {
     const res = await fetch(
       `https://open.feishu.cn/open-apis/bitable/v1/apps/${APP_TOKEN}/tables/${TABLE_ID}/records/${id}`,
       {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       }
     );
 
@@ -20,7 +57,9 @@ export async function onRequestGet(context) {
         code: 1,
         msg: "飞书返回异常",
         raw: json
-      }));
+      }), {
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
     const f = json.data.record.fields;
@@ -48,6 +87,5 @@ export async function onRequestGet(context) {
       status: 500,
       headers: { "Content-Type": "application/json" }
     });
-
   }
 }
