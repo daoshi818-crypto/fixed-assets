@@ -1,4 +1,4 @@
-// edge-functions/api/login.js
+// functions/api/login.js
 export async function onRequestPost(context) {
   const { request, env } = context;
   const { APP_ID, APP_SECRET, REDIRECT_URI } = env;
@@ -9,7 +9,7 @@ export async function onRequestPost(context) {
       return jsonResponse('Missing code', 400, true);
     }
 
-    // 1. 用 code 换 user_access_token 和 refresh_token
+    // 换取 token
     const tokenRes = await fetch('https://passport.feishu.cn/suite/passport/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -26,7 +26,7 @@ export async function onRequestPost(context) {
       throw new Error(`Token exchange failed: ${JSON.stringify(tokenJson)}`);
     }
 
-    // 2. 获取用户信息（open_id）
+    // 获取用户信息（包含 open_id）
     const userRes = await fetch('https://open.feishu.cn/open-apis/authen/v1/user_info', {
       headers: { Authorization: `Bearer ${tokenJson.access_token}` },
     });
@@ -36,7 +36,7 @@ export async function onRequestPost(context) {
     }
     const openId = userJson.data.open_id;
 
-    // 3. 存储 token 到 KV（EdgeOne 全局 KV 变量）
+    // 存储 token 到 KV
     const tokenData = {
       access_token: tokenJson.access_token,
       refresh_token: tokenJson.refresh_token,
@@ -44,7 +44,7 @@ export async function onRequestPost(context) {
     };
     await env.USER_TOKENS.put(openId, JSON.stringify(tokenData));
 
-    // 4. 返回给前端
+    // 返回给前端（包含 open_id 和 name）
     return jsonResponse({
       accessToken: tokenJson.access_token,
       openId,
